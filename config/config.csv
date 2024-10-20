@@ -1,0 +1,2 @@
+visualization_program,repository_path,image_name,file_path
+/path/to/your/plantuml.jar,/path/to/your/repository,image_name.png,/path/to/file
