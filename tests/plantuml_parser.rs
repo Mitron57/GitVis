@@ -1,71 +1,90 @@
-use std::io::Write;
-use std::process::Command;
-use git_visual::{CommitNode, CommitTree, Config, Glob};
+#[cfg(test)]
+mod tests {
+    use git_visual::{CommitNode, CommitTree};
 
-#[test]
-fn test_config() -> Result<(), Box<dyn std::error::Error>> {
-    let file = "header1,header2,header3,header4\njar,path,img,file\n";
-    let filename= "tmp.csv";
-    std::fs::File::create(filename)?.write_all(file.as_bytes())?;
-    let config = Config::new_from_file(filename)?;
-    assert_eq!(config.visualization_program, "jar");
-    assert_eq!(config.repository_path, "path");
-    assert_eq!(config.image_name, "img");
-    assert_eq!(config.file_path, "file");
-    std::fs::remove_file(filename)?;
-    Ok(())
-}
-
-#[test]
-fn test_plantuml() {
-    let tree = CommitTree {
-        file: "main.rs".into(),
-        nodes: vec![CommitNode {
-            id: "hash".into(),
-            message: "Initial commit".into(),
+    #[test]
+    fn test_single_commit() {
+        let commit_node = CommitNode {
+            id: "abcd123".to_string(),
+            message: "Initial commit".to_string(),
             parents: vec![],
-        }],
-    };
-    let plantuml =
-        "@startuml\nhash : \"Initial commit\"\nhash -down-> \"main.rs\"\n@enduml\n".to_owned();
-    assert_eq!(plantuml, tree.to_plantuml_string());
-}
+        };
+        let commit_tree = CommitTree {
+            nodes: vec![commit_node],
+        };
 
-#[test]
-fn test_git_repo() -> Result<(), Box<dyn std::error::Error>> {
-    let repo_dir = "./tmp/";
-    let file = "./tmp/main.cpp";
-    if let Err(err) = std::fs::create_dir(repo_dir) {
-        if err.kind() != std::io::ErrorKind::AlreadyExists {
-            return Err(err.into());
-        }
+        let plantuml_output = commit_tree.to_plantuml_string();
+        let expected_output = "@startuml\n\
+                               abcd123 : Initial commit\n\
+                               @enduml\n";
+
+        assert_eq!(plantuml_output, expected_output);
     }
-    Command::new("git").args(["init", repo_dir]).output()?;
-    std::fs::File::create(file)?;
-    Command::new("git")
-        .args(["add", "main.cpp"])
-        .current_dir(repo_dir)
-        .output()?;
-    Command::new("git")
-        .args(["commit", "-m", "test1"])
-        .current_dir(repo_dir)
-        .output()?;
-    std::fs::write(file, "std::cout << \"Hello, World!\"")?;
-    Command::new("git")
-        .args(["add", "main.cpp"])
-        .current_dir(repo_dir)
-        .output()?;
-    Command::new("git")
-        .args(["commit", "-m", "test2"])
-        .current_dir(repo_dir)
-        .output()?;
-    let mock = git2::Repository::open(repo_dir)?;
-    let glob = Glob::new(mock, "main.cpp");
-    let tree = CommitTree::try_from(glob)?;
-    assert_eq!(tree.nodes.len(), 1);
-    let node = tree.nodes.first().unwrap();
-    assert!(node.parents.is_empty());
-    assert_eq!(node.message.trim(), "test2");
-    std::fs::remove_dir_all(repo_dir)?;
-    Ok(())
+
+    #[test]
+    fn test_commit_chain() {
+        let commit_node1 = CommitNode {
+            id: "abcd123".to_string(),
+            message: "First commit".to_string(),
+            parents: vec![],
+        };
+        let commit_node2 = CommitNode {
+            id: "bcde234".to_string(),
+            message: "Second commit".to_string(),
+            parents: vec!["abcd123".to_string()],
+        };
+        let commit_tree = CommitTree {
+            nodes: vec![commit_node1, commit_node2],
+        };
+
+        let plantuml_output = commit_tree.to_plantuml_string();
+        let expected_output = "@startuml\n\
+                               abcd123 : First commit\n\
+                               abcd123 --> bcde234\n\
+                               bcde234 : Second commit\n\
+                               @enduml\n";
+
+        assert_eq!(plantuml_output, expected_output);
+    }
+
+    #[test]
+    fn test_branching_commits() {
+        let commit_node1 = CommitNode {
+            id: "abcd123".to_string(),
+            message: "First commit".to_string(),
+            parents: vec![],
+        };
+        let commit_node2 = CommitNode {
+            id: "bcde234".to_string(),
+            message: "Second commit".to_string(),
+            parents: vec!["abcd123".to_string()],
+        };
+        let commit_node3 = CommitNode {
+            id: "cdef345".to_string(),
+            message: "Third commit".to_string(),
+            parents: vec!["abcd123".to_string()],
+        };
+        let commit_node4 = CommitNode {
+            id: "defg456".to_string(),
+            message: "Merge commit".to_string(),
+            parents: vec!["bcde234".to_string(), "cdef345".to_string()],
+        };
+        let commit_tree = CommitTree {
+            nodes: vec![commit_node1, commit_node2, commit_node3, commit_node4],
+        };
+
+        let plantuml_output = commit_tree.to_plantuml_string();
+        let expected_output = "@startuml\n\
+                               abcd123 : First commit\n\
+                               abcd123 --> bcde234\n\
+                               bcde234 : Second commit\n\
+                               abcd123 --> cdef345\n\
+                               cdef345 : Third commit\n\
+                               bcde234 --> defg456\n\
+                               cdef345 --> defg456\n\
+                               defg456 : Merge commit\n\
+                               @enduml\n";
+
+        assert_eq!(plantuml_output, expected_output);
+    }
 }

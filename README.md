@@ -11,4 +11,4 @@ Configuration file is a csv file ([see example](./config/config.csv))
 Simply type `cargo run --release -- "path_to_your_config"` in this directory and wait for a bit
 
 # Example of output
-![PlantUML Graph](./images/output.png)
+![PlantUML Graph](./images/graph.png)
